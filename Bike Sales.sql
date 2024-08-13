@@ -208,9 +208,119 @@ ORDER BY
 
 
 --Order fulfillment: Write a query to find the average number of days taken to ship orders after the required date
+SELECT
+	YEAR(order_date) [order_year], 
+	COALESCE(shipped_date, 'unknown') AS shipped_date,
+	COUNT(1) AS num_order
+FROM
+	orders
+WHERE
+	COALESCE(shipped_date, 'unknown') = 'unknown'
+GROUP BY
+	YEAR(order_date), COALESCE(shipped_date, 'unknown')
+
+SELECT
+	order_id, order_date,
+	COALESCE(shipped_date, 'need update') AS shipped_status
+FROM
+	orders
+WHERE
+	COALESCE(shipped_date, 'need update') = 'need update'
 
 --Customer order patterns: Write a query to identify customers who placed orders in each month for the last six months
+SELECT
+	YEAR(order_date) AS shipped_year,
+	MONTH(order_date) AS shipped_month,
+	c.customer_id
+FROM
+	customers AS c
+	JOIN orders AS o
+	ON c.customer_id = o.customer_id
+WHERE
+	YEAR(order_date) = '2018' AND
+	MONTH(order_date) >= '06'
+ORDER BY
+	YEAR(order_date), MONTH(order_date) ASC 
+
+--Sales growth: Write a query to calculate the month-over-month sales growth for the past year
+--all years
+SELECT
+	YEAR(o.order_date) [order_year],
+	MONTH(o.order_date) [order_month],
+	SUM(PARSE(oi.quantity AS int)) AS num_quantity,
+	SUM((oi.list_price*(1-discount))*quantity) AS total_amount
+FROM orders AS o
+	JOIN order_items AS oi
+	ON o.order_id = oi.order_id
+GROUP BY
+	YEAR(o.order_date), MONTH(o.order_date)
+ORDER BY
+	YEAR(o.order_date), MONTH(o.order_date)
+
+--2016
+SELECT
+	YEAR(o.order_date) [order_year],
+	MONTH(o.order_date) [order_month],
+	SUM(PARSE(oi.quantity AS int)) AS num_quantity,
+	SUM((oi.list_price*(1-discount))*quantity) AS total_amount,
+	LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) OVER (ORDER BY MONTH(o.order_date)) AS prev_sales_amount,
+	CASE
+        WHEN LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) OVER (ORDER BY MONTH(o.order_date))
+		IS NULL THEN NULL  -- Handle the first month case
+        ELSE (1.0 * (SUM((oi.list_price*(1-discount))*quantity) - LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) 
+		OVER (ORDER BY MONTH(o.order_date))) / LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) 
+		OVER (ORDER BY MONTH(o.order_date))) * 100.0
+    END AS sales_growth_percent
+FROM orders AS o
+	JOIN order_items AS oi
+	ON o.order_id = oi.order_id
+WHERE YEAR(o.order_date) = '2016'
+GROUP BY
+	YEAR(o.order_date), MONTH(o.order_date)
+ORDER BY
+	YEAR(o.order_date), MONTH(o.order_date)
+
+--2017
+SELECT
+	YEAR(o.order_date) [order_year],
+	MONTH(o.order_date) [order_month],
+	SUM(PARSE(oi.quantity AS int)) AS num_quantity,
+	SUM((oi.list_price*(1-discount))*quantity) AS total_amount,
+	LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) OVER (ORDER BY MONTH(o.order_date)) AS prev_sales_amount,
+	CASE
+        WHEN LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) OVER (ORDER BY MONTH(o.order_date))
+		IS NULL THEN NULL  -- Handle the first month case
+        ELSE (1.0 * (SUM((oi.list_price*(1-discount))*quantity) - LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) 
+		OVER (ORDER BY MONTH(o.order_date))) / LAG(SUM(oi.quantity * oi.list_price * (1 - oi.discount)), 1) 
+		OVER (ORDER BY MONTH(o.order_date))) * 100.0
+    END AS sales_growth_percent
+FROM orders AS o
+	JOIN order_items AS oi
+	ON o.order_id = oi.order_id
+WHERE YEAR(o.order_date) = '2017'
+GROUP BY
+	YEAR(o.order_date), MONTH(o.order_date)
+ORDER BY
+	YEAR(o.order_date), MONTH(o.order_date)
 
 --Store stock levels: Write a query to find stores that have stock levels below a certain threshold for any product
-
---Sales growth: Write a query to calculate the month-over-month sales growth for the past year.
+SELECT TOP(15)
+	oi.product_id, 
+	p.product_name,
+	p.brand_id,
+	SUM(PARSE(oi.quantity AS int)) AS num_quantity, 
+	oi.list_price, 
+	discount, 
+	oi.list_price*(1-discount) AS price_after_discount,
+	SUM((oi.list_price*(1-discount))*quantity) AS total_amount
+FROM
+	order_items as oi
+JOIN
+	products as p
+	on oi.product_id = p.product_id
+GROUP BY oi.product_id, 
+	p.product_name, 
+	p.brand_id, 
+	oi.list_price, 
+	discount
+ORDER BY total_amount DESC
